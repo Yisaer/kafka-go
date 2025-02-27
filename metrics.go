@@ -12,6 +12,7 @@ const (
 	LblRetry              = "retry"
 	LblSuccess            = "ok"
 	LblErr                = "err"
+	LblBackOff            = "backoff"
 )
 
 var (
@@ -29,6 +30,13 @@ var (
 		Help:      "counter of Kafka Client Writer IO",
 	}, []string{LblType, LblStatus, LblRule, LblOp})
 
+	KafkaWriterBatchTotalBytes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "kafka_client",
+		Subsystem: "writer",
+		Name:      "total_bytes",
+		Help:      "Total Bytes Kafka Client Writer IO",
+	}, []string{LblType, LblRule, LblOp})
+
 	KafkaWriterBatchDurationHist = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "kafka_client",
 		Subsystem: "writer",
@@ -42,4 +50,5 @@ func init() {
 	prometheus.MustRegister(KafkaWriterBatchCounter)
 	prometheus.MustRegister(KafkaWriterErrCounter)
 	prometheus.MustRegister(KafkaWriterBatchDurationHist)
+	prometheus.MustRegister(KafkaWriterBatchTotalBytes)
 }

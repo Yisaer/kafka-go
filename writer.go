@@ -1138,7 +1138,9 @@ func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 			ptw.w.withLogger(func(log Logger) {
 				log.Printf("backing off %s writing %d messages to %s (partition: %d)", delay, len(batch.msgs), key.topic, key.partition)
 			})
+			start := time.Now()
 			time.Sleep(delay)
+			KafkaWriterBatchDurationHist.WithLabelValues(LblBackOff, ptw.w.RuleID, ptw.w.OpID).Observe(float64(time.Since(start).Microseconds()))
 		}
 
 		ptw.w.withLogger(func(log Logger) {
@@ -1165,6 +1167,7 @@ func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 		}
 
 		if err == nil {
+			KafkaWriterBatchTotalBytes.WithLabelValues(isRetryType(isRetry), ptw.w.RuleID, ptw.w.OpID).Add(float64(batch.bytes))
 			KafkaWriterBatchCounter.WithLabelValues(isRetryType(isRetry), LblSuccess, ptw.w.RuleID, ptw.w.OpID).Inc()
 			break
 		}
