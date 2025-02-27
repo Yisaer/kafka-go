@@ -13,6 +13,8 @@ const (
 	LblSuccess            = "ok"
 	LblErr                = "err"
 	LblBackOff            = "backoff"
+	LblMsg                = "msg"
+	LblBytes              = "bytes"
 )
 
 var (
@@ -44,6 +46,13 @@ var (
 		Help:      "Histogram of Kafka Client Writer IO",
 		Buckets:   prometheus.ExponentialBuckets(10, 2, 20), // 10us ~ 5s
 	}, []string{LblType, LblRule, LblOp})
+
+	KafkaWriterBatchGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "kafka_client",
+		Subsystem: "writer_batch",
+		Name:      "gauge",
+		Help:      "Gauge of Kafka Client Writer IO",
+	}, []string{LblType, LblRule, LblOp})
 )
 
 func init() {
@@ -51,4 +60,5 @@ func init() {
 	prometheus.MustRegister(KafkaWriterErrCounter)
 	prometheus.MustRegister(KafkaWriterBatchDurationHist)
 	prometheus.MustRegister(KafkaWriterBatchTotalBytes)
+	prometheus.MustRegister(KafkaWriterBatchGauge)
 }

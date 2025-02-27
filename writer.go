@@ -1115,6 +1115,8 @@ func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 	stats.batchTime.observe(int64(time.Since(batch.time)))
 	stats.batchSize.observe(int64(len(batch.msgs)))
 	stats.batchSizeBytes.observe(batch.bytes)
+	KafkaWriterBatchGauge.WithLabelValues(LblMsg, ptw.w.RuleID, ptw.w.OpID).Add(float64(len(batch.msgs)))
+	KafkaWriterBatchGauge.WithLabelValues(LblBytes, ptw.w.RuleID, ptw.w.OpID).Add(float64(batch.bytes))
 
 	var res *ProduceResponse
 	var err error
