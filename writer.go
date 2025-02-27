@@ -220,6 +220,10 @@ type Writer struct {
 
 	// non-nil when a transport was created by NewWriter, remove in 1.0.
 	transport *Transport
+
+	RuleID string
+
+	OpID string
 }
 
 // WriterConfig is a configuration type used to create new instances of Writer.
@@ -626,6 +630,7 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 	for i := range msgs {
 		n := int64(msgs[i].totalSize())
 		if n > batchBytes {
+			KafkaWriterErrCounter.WithLabelValues(LblMessageTooLargeErr, w.RuleID, w.OpID).Inc()
 			// This error is left for backward compatibility with historical
 			// behavior, but it can yield O(N^2) behaviors. The expectations
 			// are that the program will check if WriteMessages returned a
@@ -1098,6 +1103,13 @@ func (ptw *partitionWriter) awaitBatch(batch *writeBatch) {
 	stats.batchQueueTime.observe(int64(time.Since(batch.time)))
 }
 
+func isRetryType(isRetry bool) string {
+	if isRetry {
+		return LblRetry
+	}
+	return LblReq
+}
+
 func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 	stats := ptw.w.stats()
 	stats.batchTime.observe(int64(time.Since(batch.time)))
@@ -1108,7 +1120,9 @@ func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 	var err error
 	key := ptw.meta
 	for attempt, maxAttempts := 0, ptw.w.maxAttempts(); attempt < maxAttempts; attempt++ {
+		isRetry := false
 		if attempt != 0 {
+			isRetry = true
 			stats.retries.observe(1)
 			// TODO: should there be a way to asynchronously cancel this
 			// operation?
@@ -1124,7 +1138,9 @@ func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 			ptw.w.withLogger(func(log Logger) {
 				log.Printf("backing off %s writing %d messages to %s (partition: %d)", delay, len(batch.msgs), key.topic, key.partition)
 			})
+			start := time.Now()
 			time.Sleep(delay)
+			KafkaWriterBatchDurationHist.WithLabelValues(LblBackOff, ptw.w.RuleID, ptw.w.OpID).Observe(float64(time.Since(start).Microseconds()))
 		}
 
 		ptw.w.withLogger(func(log Logger) {
@@ -1143,6 +1159,7 @@ func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 		// duration of produce requests, and changed the stats.waitTime value to
 		// report the time that kafka has throttled the requests for.
 		stats.writeTime.observe(int64(time.Since(start)))
+		KafkaWriterBatchDurationHist.WithLabelValues(LblReq, ptw.w.RuleID, ptw.w.OpID).Observe(float64(time.Since(start).Microseconds()))
 
 		if res != nil {
 			err = res.Error
@@ -1150,9 +1167,11 @@ func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 		}
 
 		if err == nil {
+			KafkaWriterBatchTotalBytes.WithLabelValues(isRetryType(isRetry), ptw.w.RuleID, ptw.w.OpID).Add(float64(batch.bytes))
+			KafkaWriterBatchCounter.WithLabelValues(isRetryType(isRetry), LblSuccess, ptw.w.RuleID, ptw.w.OpID).Inc()
 			break
 		}
-
+		KafkaWriterBatchCounter.WithLabelValues(isRetryType(isRetry), LblErr, ptw.w.RuleID, ptw.w.OpID).Inc()
 		stats.errors.observe(1)
 
 		ptw.w.withErrorLogger(func(log Logger) {
