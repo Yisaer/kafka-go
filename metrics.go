@@ -74,7 +74,12 @@ var (
 		Buckets:   prometheus.ExponentialBuckets(10, 2, 20), // 10us ~ 5s
 	}, []string{LblType, LblRule, LblOp})
 
-	KafkaWriterBatchRangeCounter = prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{LblType, LblRange, LblRule, LblOp})
+	KafkaWriterBatchRangeCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "kafka_client",
+		Subsystem: "writer_batch",
+		Name:      "range_counter",
+		Help:      "range counter of Kafka Client Batch Writer IO",
+	}, []string{LblType, LblRange, LblRule, LblOp})
 )
 
 func init() {
