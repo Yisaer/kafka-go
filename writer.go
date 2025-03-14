@@ -1110,13 +1110,57 @@ func isRetryType(isRetry bool) string {
 	return LblReq
 }
 
+func (ptw *partitionWriter) updateBatchRangeMetrics(batch *writeBatch) {
+	cnt := len(batch.msgs)
+	switch {
+	case cnt <= 10:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblMsg, LblRange1to10, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case cnt <= 20:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblMsg, LblRange10to20, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case cnt <= 40:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblMsg, LblRange20to40, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case cnt <= 80:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblMsg, LblRange40to80, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case cnt <= 160:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblMsg, LblRange80to160, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case cnt <= 300:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblMsg, LblRange160to300, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case cnt <= 500:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblMsg, LblRange300to500, ptw.w.RuleID, ptw.w.OpID).Inc()
+	default:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblMsg, LblRange500toInf, ptw.w.RuleID, ptw.w.OpID).Inc()
+	}
+	totalSize := batch.bytes
+	switch {
+	case totalSize <= Kb:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblBytes, LblRange1Kb, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case totalSize <= 5*Kb:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblBytes, LblRange5Kb, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case totalSize <= 10*Kb:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblBytes, LblRange10Kb, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case totalSize <= 20*Kb:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblBytes, LblRange20Kb, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case totalSize <= 50*Kb:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblBytes, LblRange50Kb, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case totalSize <= 100*Kb:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblBytes, LblRange100Kb, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case totalSize <= 256*Kb:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblBytes, LblRange256Kb, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case totalSize <= 512*Kb:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblBytes, LblRange512Kb, ptw.w.RuleID, ptw.w.OpID).Inc()
+	case totalSize <= Mb:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblBytes, LblRangeMb, ptw.w.RuleID, ptw.w.OpID).Inc()
+	default:
+		KafkaWriterBatchRangeCounter.WithLabelValues(LblBytes, LblRangeMbToInf, ptw.w.RuleID, ptw.w.OpID).Inc()
+	}
+}
+
 func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 	stats := ptw.w.stats()
 	stats.batchTime.observe(int64(time.Since(batch.time)))
 	stats.batchSize.observe(int64(len(batch.msgs)))
 	stats.batchSizeBytes.observe(batch.bytes)
-	KafkaWriterBatchGauge.WithLabelValues(LblMsg, ptw.w.RuleID, ptw.w.OpID).Set(float64(len(batch.msgs)))
-	KafkaWriterBatchGauge.WithLabelValues(LblBytes, ptw.w.RuleID, ptw.w.OpID).Set(float64(batch.bytes))
+	ptw.updateBatchRangeMetrics(batch)
 
 	var res *ProduceResponse
 	var err error
